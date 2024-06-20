@@ -13,8 +13,8 @@ from time_calculator import calculate_time, DEFAULT_SETTINGS
 class GCodeAnalyzer(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("G-Code Analyzer")
-        self.geometry("800x600")
+        self.title("Parsa's GcodeSim")
+        self.geometry("1200x800")
         self.settings = DEFAULT_SETTINGS.copy()
 
         self.create_widgets()
@@ -29,6 +29,9 @@ class GCodeAnalyzer(tk.Tk):
         self.result_label = tk.Label(self, text="")
         self.result_label.pack()
 
+        self.time_breakdown_text = tk.Text(self, height=10, wrap=tk.WORD)
+        self.time_breakdown_text.pack(fill=tk.BOTH, expand=True)
+
         self.canvas_frame = tk.Frame(self)
         self.canvas_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -40,8 +43,8 @@ class GCodeAnalyzer(tk.Tk):
                     gcode = file.read()
 
                 lines = parse_gcode(gcode)
-                total_time = calculate_time(lines, self.settings)
-                self.display_time(total_time)
+                total_time, time_breakdown = calculate_time(lines, self.settings)
+                self.display_time(total_time, time_breakdown)
 
                 movements = extract_movements(lines)
                 self.plot_movements(movements, total_time)
@@ -51,17 +54,20 @@ class GCodeAnalyzer(tk.Tk):
         except Exception as e:
             self.result_label.config(text=f"Error loading file: {e}")
 
-    def display_time(self, total_time):
+    def display_time(self, total_time, time_breakdown):
         minutes = int(total_time // 60)
         seconds = total_time % 60
         self.result_label.config(
             text=f"Estimated time to complete the program: {minutes} minutes and {seconds:.2f} seconds")
 
+        self.time_breakdown_text.delete(1.0, tk.END)
+        self.time_breakdown_text.insert(tk.END, "\n".join(time_breakdown))
+
     def plot_movements(self, movements, total_time):
         fig = plt.figure()
 
         # 2D plot
-        ax1 = fig.add_subplot(121)
+        ax1 = fig.add_subplot(131)
         for move in movements:
             start, end = move
             ax1.plot([start[0], end[0]], [start[1], end[1]], 'b-')
@@ -78,7 +84,7 @@ class GCodeAnalyzer(tk.Tk):
                  transform=ax1.transAxes, ha="center", va="center", fontsize=12, color="red")
 
         # 3D plot with constant Z strategy
-        ax2 = fig.add_subplot(122, projection='3d')
+        ax2 = fig.add_subplot(132, projection='3d')
         z_levels = sorted(set(pos[1][2] for pos in movements))
         colors = {'G0': 'r', 'G1': 'g', 'G2': 'b'}
 
