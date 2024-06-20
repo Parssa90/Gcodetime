@@ -1,22 +1,21 @@
 import math
 import re
 
-# Define default constants for machine parameters
 DEFAULT_SETTINGS = {
-    "RAPID_SPEED": 5000,  # Rapid move speed in mm/min
-    "MAX_FEED_RATE": 1000,  # Maximum feed rate in mm/min
-    "ACCELERATION": 2000,  # Acceleration in mm/s^2
-    "PALLET_CHANGE_TIME": 20,  # Pallet change time in seconds
-    "M143_TIME": 1,  # Spindle speed control time
-    "M142_TIME": 2,  # Spindle stop and optional stop time
-    "M9_TIME": 1,  # Coolant off time
-    "M05_TIME": 1  # Spindle stop time
+    "RAPID_SPEED": 5000,
+    "MAX_FEED_RATE": 1000,
+    "ACCELERATION": 2000,
+    "PALLET_CHANGE_TIME": 20,
+    "M143_TIME": 1,
+    "M142_TIME": 2,
+    "M9_TIME": 1,
+    "M05_TIME": 1
 }
 
 def calculate_time(lines, settings=DEFAULT_SETTINGS):
     total_time = 0.0
     current_feed_rate = settings['MAX_FEED_RATE']
-    current_position = [0, 0, 0]  # X, Y, Z positions
+    current_position = [0, 0, 0]
     time_breakdown = {
         "Rapid move": 0.0,
         "Cutting move": 0.0,
@@ -58,15 +57,12 @@ def calculate_time(lines, settings=DEFAULT_SETTINGS):
                 speed = current_feed_rate
                 move_type = 'Cutting move'
 
-            # Time to accelerate to the speed
             accel_time = speed / (settings['ACCELERATION'] * 60)
             accel_distance = 0.5 * (speed / 60) * accel_time
 
             if distance <= 2 * accel_distance:
-                # Not enough distance to reach full speed
                 move_time = 2 * math.sqrt(distance / (settings['ACCELERATION'] * 60))
             else:
-                # Time to travel the acceleration phase + constant speed phase + deceleration phase
                 move_time = 2 * accel_time + (distance - 2 * accel_distance) / (speed / 60)
 
             total_time += move_time

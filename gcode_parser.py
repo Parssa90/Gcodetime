@@ -2,7 +2,6 @@ import re
 
 def parse_gcode(gcode):
     try:
-        # Split gcode into lines
         lines = gcode.strip().split('\n')
         return lines
     except Exception as e:
@@ -10,8 +9,7 @@ def parse_gcode(gcode):
 
 def extract_movements(lines):
     movements = []
-    current_position = [0, 0, 0]  # X, Y, Z positions
-
+    current_position = [0, 0, 0]
     for line in lines:
         try:
             line = line.strip()

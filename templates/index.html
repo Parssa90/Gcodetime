@@ -19,6 +19,7 @@
             height: 150px;
             overflow-y: scroll;
         }
+        canvas { display: block; }
     </style>
 </head>
 <body>
@@ -32,6 +33,9 @@
         <div class="box" id="timeBox"></div>
         <div class="box">
             <div id="plotlyChart"></div>
+        </div>
+        <div class="box">
+            <img id="animationImage" style="width: 100%; height: 600px;">
         </div>
     </div>
     <script>
@@ -59,16 +63,20 @@
                         p.textContent = `${key}: ${data.time_breakdown[key].toFixed(2)} seconds`;
                         timeBox.appendChild(p);
                     }
-                    fetch('/plot', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(data)
-                    }).then(response => response.json()).then(plotData => {
-                        Plotly.newPlot('plotlyChart', plotData.data, plotData.layout);
-                    });
+                    generateAnimation(data.movements);
                 }
+            });
+        }
+
+        function generateAnimation(movements) {
+            fetch('/animation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ movements: movements })
+            }).then(response => response.json()).then(data => {
+                document.getElementById('animationImage').src = data.animation;
             });
         }
     </script>
