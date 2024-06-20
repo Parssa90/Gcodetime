@@ -77,22 +77,30 @@ class GCodeAnalyzer(tk.Tk):
         ax1.text(0.5, 0.95, f"Total Time: {minutes} minutes and {seconds:.2f} seconds",
                  transform=ax1.transAxes, ha="center", va="center", fontsize=12, color="red")
 
-        # 3D plot
+        # 3D plot with constant Z strategy
         ax2 = fig.add_subplot(122, projection='3d')
+        z_levels = sorted(set(pos[1][2] for pos in movements))
         colors = {'G0': 'r', 'G1': 'g', 'G2': 'b'}
-        for move in movements:
-            start, end = move
-            g_code = 'G0'  # Default to G0
-            if abs(start[2] - end[2]) > 0:
-                g_code = 'G1'
-            elif abs(start[0] - end[0]) > 0 or abs(start[1] - end[1]) > 0:
-                g_code = 'G2'
-            ax2.plot([start[0], end[0]], [start[1], end[1]], [start[2], end[2]], colors[g_code])
+
+        for z in z_levels:
+            for move in movements:
+                start, end = move
+                if start[2] == z and end[2] == z:
+                    g_code = 'G0'  # Default to G0
+                    if abs(start[2] - end[2]) > 0:
+                        g_code = 'G1'
+                    elif abs(start[0] - end[0]) > 0 or abs(start[1] - end[1]) > 0:
+                        g_code = 'G2'
+                    ax2.plot([start[0], end[0]], [start[1], end[1]], [start[2], end[2]], colors[g_code])
+            # Add horizontal lines at each Z level to visualize slicing
+            ax2.plot([min(start[0] for start, end in movements), max(end[0] for start, end in movements)],
+                     [min(start[1] for start, end in movements), max(end[1] for start, end in movements)],
+                     [z, z], 'k--')
 
         ax2.set_xlabel("X")
         ax2.set_ylabel("Y")
         ax2.set_zlabel("Z")
-        ax2.set_title("3D Tool Path")
+        ax2.set_title("3D Tool Path (Constant Z Slicing)")
 
         for widget in self.canvas_frame.winfo_children():
             widget.destroy()
