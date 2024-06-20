@@ -76,7 +76,7 @@
                 },
                 body: JSON.stringify({ movements: movements })
             }).then(response => response.json()).then(data => {
-                document.getElementById('animationImage').src = data.animation;
+                document.getElementById('animationImage').src = 'data:image/gif;base64,' + data.animation;
             });
         }
     </script>

@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, jsonify
 import os
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from io import BytesIO
+import base64
 from gcode_parser import parse_gcode, extract_movements
 from time_calculator import calculate_time, DEFAULT_SETTINGS
 
@@ -59,9 +61,13 @@ def animation_endpoint():
         return line,
 
     ani = animation.FuncAnimation(fig, update, frames=len(movements), init_func=init, blit=True)
-    ani.save('static/animation.gif', writer='imagemagick')
 
-    return jsonify({'animation': '/static/animation.gif'})
+    buf = BytesIO()
+    ani.save(buf, format='gif')
+    buf.seek(0)
+    gif_base64 = base64.b64encode(buf.getvalue()).decode('ascii')
+
+    return jsonify({'animation': gif_base64})
 
 if __name__ == '__main__':
     app.run(debug=True)
