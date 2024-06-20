@@ -1,5 +1,3 @@
-# gcode_parser.py
-
 import re
 
 def parse_gcode(gcode):

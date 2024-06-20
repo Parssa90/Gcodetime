@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G-Code Analyzer</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .box {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        #timeBox {
+            height: 150px;
+            overflow-y: scroll;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>G-Code Analyzer</h1>
+        <div class="box">
+            <input type="file" id="fileInput">
+            <button onclick="uploadFile()">Upload</button>
+            <p id="resultLabel"></p>
+        </div>
+        <div class="box" id="timeBox"></div>
+        <div class="box">
+            <div id="plotlyChart"></div>
+        </div>
+    </div>
+    <script>
+        function uploadFile() {
+            var fileInput = document.getElementById('fileInput');
+            var file = fileInput.files[0];
+            var formData = new FormData();
+            formData.append('file', file);
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            }).then(response => response.json()).then(data => {
+                if (data.error) {
+                    document.getElementById('resultLabel').textContent = data.error;
+                } else {
+                    document.getElementById('resultLabel').textContent = 'File loaded successfully!';
+                    var total_time = data.total_time;
+                    var minutes = Math.floor(total_time / 60);
+                    var seconds = total_time % 60;
+                    document.getElementById('resultLabel').textContent += ` Total Time: ${minutes} minutes and ${seconds.toFixed(2)} seconds`;
+                    var timeBox = document.getElementById('timeBox');
+                    timeBox.innerHTML = '';
+                    for (var key in data.time_breakdown) {
+                        var p = document.createElement('p');
+                        p.textContent = `${key}: ${data.time_breakdown[key].toFixed(2)} seconds`;
+                        timeBox.appendChild(p);
+                    }
+                    fetch('/plot', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(data)
+                    }).then(response => response.json()).then(plotData => {
+                        Plotly.newPlot('plotlyChart', plotData.data, plotData.layout);
+                    });
+                }
+            });
+        }
+    </script>
+</body>
+</html>

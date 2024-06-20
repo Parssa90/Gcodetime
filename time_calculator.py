@@ -1,5 +1,3 @@
-# time_calculator.py
-
 import math
 import re
 

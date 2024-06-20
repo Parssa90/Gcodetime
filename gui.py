@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.animation import FuncAnimation
-import numpy as np
 
 from gcode_parser import parse_gcode, extract_movements
 from time_calculator import calculate_time, DEFAULT_SETTINGS
@@ -18,6 +17,8 @@ class GCodeAnalyzer(tk.Tk):
         self.title("Parsa's GcodeSim")
         self.geometry("1400x800")
         self.settings = DEFAULT_SETTINGS.copy()
+        self.animation_running = False
+        self.ani = None
 
         self.create_widgets()
 
@@ -25,18 +26,26 @@ class GCodeAnalyzer(tk.Tk):
         default_font = font.nametofont("TkDefaultFont")
         default_font.configure(size=12)
 
-        self.open_button = tk.Button(self, text="Open G-Code File", command=self.open_file, font=default_font)
-        self.open_button.pack(pady=5)
+        # Top frame for open and settings buttons
+        self.top_frame = tk.Frame(self)
+        self.top_frame.pack(side=tk.TOP, fill=tk.X, pady=5)
 
-        self.settings_button = tk.Button(self, text="Settings", command=self.open_settings, font=default_font)
-        self.settings_button.pack(pady=5)
+        self.open_button = tk.Button(self.top_frame, text="Open G-Code File", command=self.open_file, font=default_font)
+        self.open_button.pack(side=tk.LEFT, padx=5)
 
-        self.result_label = tk.Label(self, text="", font=default_font)
-        self.result_label.pack(pady=5)
+        self.settings_button = tk.Button(self.top_frame, text="Settings", command=self.open_settings, font=default_font)
+        self.settings_button.pack(side=tk.LEFT, padx=5)
+
+        self.result_label = tk.Label(self.top_frame, text="", font=default_font)
+        self.result_label.pack(side=tk.LEFT, padx=5)
+
+        # Main frame
+        self.main_frame = tk.Frame(self)
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
         # Time breakdown frame
-        self.time_frame = tk.LabelFrame(self, text="Time Breakdown", font=default_font)
-        self.time_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        self.time_frame = tk.LabelFrame(self.main_frame, text="Time Breakdown", font=default_font)
+        self.time_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=5)
 
         self.time_scroll = tk.Scrollbar(self.time_frame)
         self.time_scroll.pack(side=tk.RIGHT, fill=tk.Y)
@@ -48,15 +57,15 @@ class GCodeAnalyzer(tk.Tk):
         self.time_scroll.config(command=self.time_breakdown_text.yview)
 
         # Plot frame
-        self.plot_frame = tk.LabelFrame(self, text="Tool Path", font=default_font)
-        self.plot_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        self.plot_frame = tk.LabelFrame(self.main_frame, text="Tool Path", font=default_font)
+        self.plot_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=5)
 
         self.canvas_frame = tk.Frame(self.plot_frame)
         self.canvas_frame.pack(fill=tk.BOTH, expand=True)
 
         # Animation frame
-        self.animation_frame = tk.LabelFrame(self, text="Animation", font=default_font)
-        self.animation_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        self.animation_frame = tk.LabelFrame(self.main_frame, text="Animation", font=default_font)
+        self.animation_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=5)
 
         self.animation_canvas_frame = tk.Frame(self.animation_frame)
         self.animation_canvas_frame.pack(fill=tk.BOTH, expand=True)
@@ -81,8 +90,6 @@ class GCodeAnalyzer(tk.Tk):
                                     variable=self.speed_var, font=default_font)
         self.speed_scale.pack(side=tk.LEFT, padx=5)
 
-        self.animation_running = False
-
     def open_file(self):
         try:
             file_path = filedialog.askopenfilename(filetypes=[("G-Code files", "*.txt"), ("All files", "*.*")])
@@ -96,12 +103,10 @@ class GCodeAnalyzer(tk.Tk):
 
                 movements = extract_movements(lines)
                 self.plot_movements(movements, total_time)
-                self.movements = movements
-                self.total_time = total_time
+                self.prepare_animation(movements)
 
                 self.result_label.config(
                     text=f"File loaded successfully! Total Time: {int(total_time // 60)} minutes and {total_time % 60:.2f} seconds")
-                self.prepare_animation(movements)
         except Exception as e:
             self.result_label.config(text=f"Error loading file: {e}")
 
@@ -157,22 +162,29 @@ class GCodeAnalyzer(tk.Tk):
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
     def prepare_animation(self, movements):
-        self.fig, self.ax = plt.subplots()
+        try:
+            self.fig_anim, self.ax_anim = plt.subplots()
 
-        self.ax.set_xlim([min(move[0][0] for move in movements), max(move[1][0] for move in movements)])
-        self.ax.set_ylim([min(move[0][1] for move in movements), max(move[1][1] for move in movements)])
+            self.ax_anim.set_xlim([min(move[0][0] for move in movements), max(move[1][0] for move in movements)])
+            self.ax_anim.set_ylim([min(move[0][1] for move in movements), max(move[1][1] for move in movements)])
 
-        self.line, = self.ax.plot([], [], 'bo-')
-        self.animation_data = self.get_animation_data(movements)
-        self.ani = FuncAnimation(self.fig, self.update_animation, frames=len(self.animation_data), interval=1000,
-                                 blit=True)
+            self.line_anim, = self.ax_anim.plot([], [], 'bo-')
+            self.animation_data = self.get_animation_data(movements)
 
-        for widget in self.animation_canvas_frame.winfo_children():
-            widget.destroy()
+            if self.ani:
+                self.ani.event_source.stop()
 
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.animation_canvas_frame)
-        self.canvas.draw()
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            self.ani = FuncAnimation(self.fig_anim, self.update_animation, frames=len(self.animation_data),
+                                     interval=1000 / self.speed_var.get(), blit=True, repeat=False)
+
+            for widget in self.animation_canvas_frame.winfo_children():
+                widget.destroy()
+
+            self.canvas_anim = FigureCanvasTkAgg(self.fig_anim, master=self.animation_canvas_frame)
+            self.canvas_anim.draw()
+            self.canvas_anim.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        except Exception as e:
+            messagebox.showerror("Animation Error", f"An error occurred while preparing the animation: {e}")
 
     def get_animation_data(self, movements):
         data = []
@@ -183,22 +195,31 @@ class GCodeAnalyzer(tk.Tk):
         return data
 
     def update_animation(self, frame):
-        self.line.set_data([self.animation_data[frame][0]], [self.animation_data[frame][1]])
-        return self.line,
+        self.line_anim.set_data([self.animation_data[frame][0]], [self.animation_data[frame][1]])
+        return self.line_anim,
 
     def play_animation(self):
-        if not self.animation_running:
-            self.ani.event_source.start()
-            self.animation_running = True
+        try:
+            if self.ani:
+                self.ani.event_source.start()
+                self.animation_running = True
+        except Exception as e:
+            messagebox.showerror("Animation Error", f"An error occurred while playing the animation: {e}")
 
     def pause_animation(self):
-        if self.animation_running:
-            self.ani.event_source.stop()
-            self.animation_running = False
+        try:
+            if self.ani:
+                self.ani.event_source.stop()
+                self.animation_running = False
+        except Exception as e:
+            messagebox.showerror("Animation Error", f"An error occurred while pausing the animation: {e}")
 
     def stop_animation(self):
-        self.pause_animation()
-        self.prepare_animation(self.movements)
+        try:
+            self.pause_animation()
+            self.prepare_animation(self.movements)
+        except Exception as e:
+            messagebox.showerror("Animation Error", f"An error occurred while stopping the animation: {e}")
 
     def open_settings(self):
         settings_window = tk.Toplevel(self)
