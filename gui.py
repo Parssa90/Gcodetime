@@ -4,9 +4,11 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from mpl_toolkits.mplot3d import Axes3D
 
 from gcode_parser import parse_gcode, extract_movements
 from time_calculator import calculate_time, DEFAULT_SETTINGS
+
 
 class GCodeAnalyzer(tk.Tk):
     def __init__(self):
@@ -31,33 +33,66 @@ class GCodeAnalyzer(tk.Tk):
         self.canvas_frame.pack(fill=tk.BOTH, expand=True)
 
     def open_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("G-Code files", "*.txt"), ("All files", "*.*")])
-        if file_path:
-            with open(file_path, 'r') as file:
-                gcode = file.read()
+        try:
+            file_path = filedialog.askopenfilename(filetypes=[("G-Code files", "*.txt"), ("All files", "*.*")])
+            if file_path:
+                with open(file_path, 'r') as file:
+                    gcode = file.read()
 
-            lines = parse_gcode(gcode)
-            total_time = calculate_time(lines, self.settings)
-            self.display_time(total_time)
+                lines = parse_gcode(gcode)
+                total_time = calculate_time(lines, self.settings)
+                self.display_time(total_time)
 
-            movements = extract_movements(lines)
-            self.plot_movements(movements)
+                movements = extract_movements(lines)
+                self.plot_movements(movements, total_time)
+
+                self.result_label.config(text="File loaded successfully!")
+
+        except Exception as e:
+            self.result_label.config(text=f"Error loading file: {e}")
 
     def display_time(self, total_time):
         minutes = int(total_time // 60)
         seconds = total_time % 60
-        self.result_label.config(text=f"Estimated time to complete the program: {minutes} minutes and {seconds:.2f} seconds")
+        self.result_label.config(
+            text=f"Estimated time to complete the program: {minutes} minutes and {seconds:.2f} seconds")
 
-    def plot_movements(self, movements):
-        fig, ax = plt.subplots()
+    def plot_movements(self, movements, total_time):
+        fig = plt.figure()
+
+        # 2D plot
+        ax1 = fig.add_subplot(121)
         for move in movements:
             start, end = move
-            ax.plot([start[0], end[0]], [start[1], end[1]], 'b-')
+            ax1.plot([start[0], end[0]], [start[1], end[1]], 'b-')
 
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
-        ax.set_title("Tool Path")
-        ax.axis('equal')
+        ax1.set_xlabel("X")
+        ax1.set_ylabel("Y")
+        ax1.set_title("2D Tool Path")
+        ax1.axis('equal')
+
+        # Display total time on the plot
+        minutes = int(total_time // 60)
+        seconds = total_time % 60
+        ax1.text(0.5, 0.95, f"Total Time: {minutes} minutes and {seconds:.2f} seconds",
+                 transform=ax1.transAxes, ha="center", va="center", fontsize=12, color="red")
+
+        # 3D plot
+        ax2 = fig.add_subplot(122, projection='3d')
+        colors = {'G0': 'r', 'G1': 'g', 'G2': 'b'}
+        for move in movements:
+            start, end = move
+            g_code = 'G0'  # Default to G0
+            if abs(start[2] - end[2]) > 0:
+                g_code = 'G1'
+            elif abs(start[0] - end[0]) > 0 or abs(start[1] - end[1]) > 0:
+                g_code = 'G2'
+            ax2.plot([start[0], end[0]], [start[1], end[1]], [start[2], end[2]], colors[g_code])
+
+        ax2.set_xlabel("X")
+        ax2.set_ylabel("Y")
+        ax2.set_zlabel("Z")
+        ax2.set_title("3D Tool Path")
 
         for widget in self.canvas_frame.winfo_children():
             widget.destroy()
@@ -93,4 +128,3 @@ class GCodeAnalyzer(tk.Tk):
             self.settings[key] = float(entry.get())
         except ValueError:
             messagebox.showerror("Invalid input", f"Please enter a valid number for {key}.")
-
