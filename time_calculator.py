@@ -19,7 +19,15 @@ def calculate_time(lines, settings=DEFAULT_SETTINGS):
     total_time = 0.0
     current_feed_rate = settings['MAX_FEED_RATE']
     current_position = [0, 0, 0]  # X, Y, Z positions
-    time_breakdown = []
+    time_breakdown = {
+        "Rapid move": 0.0,
+        "Cutting move": 0.0,
+        "Pallet change": 0.0,
+        "Spindle speed control": 0.0,
+        "Spindle stop and optional stop": 0.0,
+        "Coolant off": 0.0,
+        "Spindle stop": 0.0
+    }
 
     for line in lines:
         line = line.strip()
@@ -64,24 +72,24 @@ def calculate_time(lines, settings=DEFAULT_SETTINGS):
                 move_time = 2 * accel_time + (distance - 2 * accel_distance) / (speed / 60)
 
             total_time += move_time
-            time_breakdown.append(f"{move_type}: {move_time:.2f} seconds")
+            time_breakdown[move_type] += move_time
             current_position = target_position
 
         elif line.startswith('M'):
             if 'M60' in line:
                 total_time += settings['PALLET_CHANGE_TIME']
-                time_breakdown.append(f"Pallet change: {settings['PALLET_CHANGE_TIME']} seconds")
+                time_breakdown["Pallet change"] += settings['PALLET_CHANGE_TIME']
             elif 'M143' in line:
                 total_time += settings['M143_TIME']
-                time_breakdown.append(f"Spindle speed control: {settings['M143_TIME']} seconds")
+                time_breakdown["Spindle speed control"] += settings['M143_TIME']
             elif 'M142' in line:
                 total_time += settings['M142_TIME']
-                time_breakdown.append(f"Spindle stop and optional stop: {settings['M142_TIME']} seconds")
+                time_breakdown["Spindle stop and optional stop"] += settings['M142_TIME']
             elif 'M9' in line:
                 total_time += settings['M9_TIME']
-                time_breakdown.append(f"Coolant off: {settings['M9_TIME']} seconds")
+                time_breakdown["Coolant off"] += settings['M9_TIME']
             elif 'M05' in line:
                 total_time += settings['M05_TIME']
-                time_breakdown.append(f"Spindle stop: {settings['M05_TIME']} seconds")
+                time_breakdown["Spindle stop"] += settings['M05_TIME']
 
     return total_time, time_breakdown

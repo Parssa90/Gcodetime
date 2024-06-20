@@ -1,10 +1,12 @@
 # gui.py
 
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, font
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.animation import FuncAnimation
+import numpy as np
 
 from gcode_parser import parse_gcode, extract_movements
 from time_calculator import calculate_time, DEFAULT_SETTINGS
@@ -14,26 +16,72 @@ class GCodeAnalyzer(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Parsa's GcodeSim")
-        self.geometry("1200x800")
+        self.geometry("1400x800")
         self.settings = DEFAULT_SETTINGS.copy()
 
         self.create_widgets()
 
     def create_widgets(self):
-        self.open_button = tk.Button(self, text="Open G-Code File", command=self.open_file)
-        self.open_button.pack()
+        default_font = font.nametofont("TkDefaultFont")
+        default_font.configure(size=12)
 
-        self.settings_button = tk.Button(self, text="Settings", command=self.open_settings)
-        self.settings_button.pack()
+        self.open_button = tk.Button(self, text="Open G-Code File", command=self.open_file, font=default_font)
+        self.open_button.pack(pady=5)
 
-        self.result_label = tk.Label(self, text="")
-        self.result_label.pack()
+        self.settings_button = tk.Button(self, text="Settings", command=self.open_settings, font=default_font)
+        self.settings_button.pack(pady=5)
 
-        self.time_breakdown_text = tk.Text(self, height=10, wrap=tk.WORD)
+        self.result_label = tk.Label(self, text="", font=default_font)
+        self.result_label.pack(pady=5)
+
+        # Time breakdown frame
+        self.time_frame = tk.LabelFrame(self, text="Time Breakdown", font=default_font)
+        self.time_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.time_scroll = tk.Scrollbar(self.time_frame)
+        self.time_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.time_breakdown_text = tk.Text(self.time_frame, height=10, wrap=tk.WORD,
+                                           yscrollcommand=self.time_scroll.set, font=default_font)
         self.time_breakdown_text.pack(fill=tk.BOTH, expand=True)
 
-        self.canvas_frame = tk.Frame(self)
+        self.time_scroll.config(command=self.time_breakdown_text.yview)
+
+        # Plot frame
+        self.plot_frame = tk.LabelFrame(self, text="Tool Path", font=default_font)
+        self.plot_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.canvas_frame = tk.Frame(self.plot_frame)
         self.canvas_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Animation frame
+        self.animation_frame = tk.LabelFrame(self, text="Animation", font=default_font)
+        self.animation_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.animation_canvas_frame = tk.Frame(self.animation_frame)
+        self.animation_canvas_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.control_frame = tk.Frame(self.animation_frame)
+        self.control_frame.pack(pady=5)
+
+        self.play_button = tk.Button(self.control_frame, text="Play", command=self.play_animation, font=default_font)
+        self.play_button.pack(side=tk.LEFT, padx=5)
+
+        self.pause_button = tk.Button(self.control_frame, text="Pause", command=self.pause_animation, font=default_font)
+        self.pause_button.pack(side=tk.LEFT, padx=5)
+
+        self.stop_button = tk.Button(self.control_frame, text="Stop", command=self.stop_animation, font=default_font)
+        self.stop_button.pack(side=tk.LEFT, padx=5)
+
+        self.speed_label = tk.Label(self.control_frame, text="Speed:", font=default_font)
+        self.speed_label.pack(side=tk.LEFT, padx=5)
+
+        self.speed_var = tk.DoubleVar(value=1.0)
+        self.speed_scale = tk.Scale(self.control_frame, from_=0.1, to=3.0, orient=tk.HORIZONTAL, resolution=0.1,
+                                    variable=self.speed_var, font=default_font)
+        self.speed_scale.pack(side=tk.LEFT, padx=5)
+
+        self.animation_running = False
 
     def open_file(self):
         try:
@@ -48,20 +96,19 @@ class GCodeAnalyzer(tk.Tk):
 
                 movements = extract_movements(lines)
                 self.plot_movements(movements, total_time)
+                self.movements = movements
+                self.total_time = total_time
 
-                self.result_label.config(text="File loaded successfully!")
-
+                self.result_label.config(
+                    text=f"File loaded successfully! Total Time: {int(total_time // 60)} minutes and {total_time % 60:.2f} seconds")
+                self.prepare_animation(movements)
         except Exception as e:
             self.result_label.config(text=f"Error loading file: {e}")
 
     def display_time(self, total_time, time_breakdown):
-        minutes = int(total_time // 60)
-        seconds = total_time % 60
-        self.result_label.config(
-            text=f"Estimated time to complete the program: {minutes} minutes and {seconds:.2f} seconds")
-
+        breakdown_text = "\n".join([f"{key}: {value:.2f} seconds" for key, value in time_breakdown.items()])
         self.time_breakdown_text.delete(1.0, tk.END)
-        self.time_breakdown_text.insert(tk.END, "\n".join(time_breakdown))
+        self.time_breakdown_text.insert(tk.END, breakdown_text)
 
     def plot_movements(self, movements, total_time):
         fig = plt.figure()
@@ -76,12 +123,6 @@ class GCodeAnalyzer(tk.Tk):
         ax1.set_ylabel("Y")
         ax1.set_title("2D Tool Path")
         ax1.axis('equal')
-
-        # Display total time on the plot
-        minutes = int(total_time // 60)
-        seconds = total_time % 60
-        ax1.text(0.5, 0.95, f"Total Time: {minutes} minutes and {seconds:.2f} seconds",
-                 transform=ax1.transAxes, ha="center", va="center", fontsize=12, color="red")
 
         # 3D plot with constant Z strategy
         ax2 = fig.add_subplot(132, projection='3d')
@@ -114,6 +155,50 @@ class GCodeAnalyzer(tk.Tk):
         canvas = FigureCanvasTkAgg(fig, master=self.canvas_frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    def prepare_animation(self, movements):
+        self.fig, self.ax = plt.subplots()
+
+        self.ax.set_xlim([min(move[0][0] for move in movements), max(move[1][0] for move in movements)])
+        self.ax.set_ylim([min(move[0][1] for move in movements), max(move[1][1] for move in movements)])
+
+        self.line, = self.ax.plot([], [], 'bo-')
+        self.animation_data = self.get_animation_data(movements)
+        self.ani = FuncAnimation(self.fig, self.update_animation, frames=len(self.animation_data), interval=1000,
+                                 blit=True)
+
+        for widget in self.animation_canvas_frame.winfo_children():
+            widget.destroy()
+
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.animation_canvas_frame)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    def get_animation_data(self, movements):
+        data = []
+        for move in movements:
+            start, end = move
+            data.append((start[0], start[1]))
+            data.append((end[0], end[1]))
+        return data
+
+    def update_animation(self, frame):
+        self.line.set_data([self.animation_data[frame][0]], [self.animation_data[frame][1]])
+        return self.line,
+
+    def play_animation(self):
+        if not self.animation_running:
+            self.ani.event_source.start()
+            self.animation_running = True
+
+    def pause_animation(self):
+        if self.animation_running:
+            self.ani.event_source.stop()
+            self.animation_running = False
+
+    def stop_animation(self):
+        self.pause_animation()
+        self.prepare_animation(self.movements)
 
     def open_settings(self):
         settings_window = tk.Toplevel(self)
