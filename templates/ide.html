@@ -2,6 +2,20 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <title>IDE</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="header">
+        <button onclick="location.href='/'">Home</button>
+        <button onclick="location.href='/upload'">Import</button>
+    </div>
+**templates/index.html**
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
     <title>OKUMA G-Code Simulator</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
@@ -61,5 +75,6 @@
         function pause() { /* Implement pause functionality */ }
         function stop() { /* Implement stop functionality */ }
     </script>
+    </div>
 </body>
 </html>
